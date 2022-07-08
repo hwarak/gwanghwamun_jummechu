@@ -1,5 +1,6 @@
 import 'package:anim_search_bar/anim_search_bar.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -70,20 +71,63 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: renderAppBar(),
-      body: Stack(
-        children: [
-          _CustomGoogleMap(
-            initialPosition: initialPosition,
-            markerList: lunchList,
-          ),
-          _SearchBar(
-            textController: textController,
-          ),
-        ],
-      ),
-    );
+    return FutureBuilder<String>(
+        future: checkPermission(),
+        builder: (BuildContext context, AsyncSnapshot snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(
+              child: CircularProgressIndicator(),
+            );
+          }
+
+          if (snapshot.data == '위치 권한이 허가 되었습니다') {
+            return Scaffold(
+              appBar: renderAppBar(),
+              body: Stack(
+                children: [
+                  _CustomGoogleMap(
+                    initialPosition: initialPosition,
+                    markerList: lunchList,
+                  ),
+                  _SearchBar(
+                    textController: textController,
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return Center(
+            child: Text(snapshot.data),
+          );
+        });
+  }
+
+  Future<String> checkPermission() async {
+    // location service가 활성화 되어있는지 확인함
+    final isLocationEnabled = await Geolocator.isLocationServiceEnabled();
+
+    if (!isLocationEnabled) {
+      // 활성화 되어 있지 않으면 위치 서비스 활성화 해달라고 띄우자
+      return '위치 서비스를 활성화 해주세요.';
+    }
+
+    // 활성화 되어 있다면 현재 위치서비스에 대해 갖고있는 권한을
+    // LocationPermission 형태로 가져올 수 있다
+    LocationPermission checkPermission = await Geolocator.checkPermission();
+
+    if (checkPermission == LocationPermission.denied) {
+      checkPermission = await Geolocator.requestPermission();
+      if (checkPermission == LocationPermission.denied) {
+        return '위치 권한을 허가해주세요';
+      }
+    }
+
+    if (checkPermission == LocationPermission.deniedForever) {
+      return '설정에서 앱의 위치 권한을 허가해주세요';
+    }
+
+    return '위치 권한이 허가 되었습니다';
   }
 
   AppBar renderAppBar() {
@@ -120,6 +164,7 @@ class _CustomGoogleMap extends StatelessWidget {
         initialCameraPosition: initialPosition,
         mapType: MapType.normal,
         myLocationEnabled: true,
+        myLocationButtonEnabled: false,
         markers: Set.from(markerList),
       ),
     );
